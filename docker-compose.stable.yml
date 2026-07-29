@@ -1,0 +1,105 @@
+services:
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?Set MYSQL_DATABASE in Dokploy Environment}
+      MYSQL_USER: ${MYSQL_USER:?Set MYSQL_USER in Dokploy Environment}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in Dokploy Environment}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in Dokploy Environment}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MYSQL_ROOT_PASSWORD}\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.migrate
+    command:
+      - -path
+      - /migrations
+      - -database
+      - mysql://${MYSQL_USER:?Set MYSQL_USER in Dokploy Environment}:${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in Dokploy Environment}@tcp(db:3306)/${MYSQL_DATABASE:?Set MYSQL_DATABASE in Dokploy Environment}?multiStatements=true
+      - up
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  # This digest is the 8.34.0 Chromium multi-architecture manifest list.
+  # On linux/amd64, Docker selects child manifest sha256:f0c5a2be...
+  gotenberg:
+    platform: linux/amd64
+    image: gotenberg/gotenberg:8.34.0-chromium@sha256:e6b66c4553c7747f86fb41d012665c5ac114b46188f53d09080d217bcb16cee2
+    environment:
+      API_BODY_LIMIT: 16MB
+      API_TIMEOUT: 30s
+      API_DISABLE_DOWNLOAD_FROM: "true"
+      CHROMIUM_AUTO_START: "true"
+      CHROMIUM_MAX_CONCURRENCY: "2"
+      CHROMIUM_MAX_QUEUE_SIZE: "10"
+      WEBHOOK_DISABLE: "true"
+      CHROMIUM_DENY_PRIVATE_IPS: "true"
+      CHROMIUM_DENY_PUBLIC_IPS: "true"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 24
+      start_period: 20s
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      APP_ENV: production
+      PORT: "8080"
+      DATABASE_DSN: ${MYSQL_USER:?Set MYSQL_USER in Dokploy Environment}:${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in Dokploy Environment}@tcp(db:3306)/${MYSQL_DATABASE:?Set MYSQL_DATABASE in Dokploy Environment}?charset=utf8mb4&parseTime=True&loc=UTC
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in Dokploy Environment}
+      CORS_ORIGIN: https://${DOMAIN:?Set DOMAIN in Dokploy Environment}
+      GOTENBERG_URL: http://gotenberg:3000
+      GOTENBERG_TIMEOUT: 35s
+      GOTENBERG_MAX_CONCURRENCY: "2"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      gotenberg:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_BASE_URL: /api/v1
+        VITE_DEMO_CREDENTIALS: "false"
+    expose:
+      - "80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+
+volumes:
+  mysql_data:
