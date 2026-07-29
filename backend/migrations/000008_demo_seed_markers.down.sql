@@ -1,0 +1,16 @@
+DELETE el FROM estimate_lines el JOIN estimates e ON e.id=el.estimate_id WHERE e.seed_marker='T6-DEMO';
+DELETE il FROM invoice_lines il JOIN invoices i ON i.id=il.invoice_id WHERE i.seed_marker='T6-DEMO';
+DELETE FROM daily_reports WHERE seed_marker='T6-DEMO';
+DELETE FROM schedules WHERE seed_marker='T6-DEMO';
+DELETE FROM project_members WHERE seed_marker='T6-DEMO';
+DELETE FROM estimates WHERE seed_marker='T6-DEMO';
+DELETE FROM invoices WHERE seed_marker='T6-DEMO';
+DELETE FROM subcontractor_workers WHERE seed_marker='T6-DEMO';
+DELETE FROM accounts WHERE seed_marker='T6-DEMO';
+ALTER TABLE invoices DROP INDEX idx_invoices_seed_marker, DROP COLUMN seed_marker;
+ALTER TABLE estimates DROP INDEX idx_estimates_seed_marker, DROP COLUMN seed_marker;
+ALTER TABLE schedules DROP INDEX idx_schedules_seed_marker, DROP COLUMN seed_marker;
+ALTER TABLE daily_reports DROP INDEX idx_daily_reports_seed_marker, DROP COLUMN seed_marker;
+ALTER TABLE project_members DROP INDEX idx_project_members_seed_marker, DROP COLUMN seed_marker;
+ALTER TABLE subcontractor_workers DROP INDEX idx_subcontractor_workers_seed_marker, DROP COLUMN seed_marker;
+ALTER TABLE accounts DROP INDEX idx_accounts_seed_marker, DROP COLUMN seed_marker;

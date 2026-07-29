@@ -1,0 +1,37 @@
+# Environment files (templates are safe to commit)
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Node.js / TypeScript
+node_modules/
+dist/
+coverage/
+.vite/
+.eslintcache
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Go
+bin/
+*.test
+coverage.out
+*.coverprofile
+
+# Logs and repository-local temporary files
+*.log
+/tmp/
+
+# OS metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE-local files
+.idea/
+*.iml
+.vscode/*.local.json

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+  <meta charset="utf-8">
+  <title>{{.Title}} {{.Number}}</title>
+  <style>
+    @font-face { font-family: "Noto Sans JP"; src: url("NotoSansJP-Regular.ttf") format("truetype"); font-display: block; }
+    @page { size: A4; margin: 12mm; }
+    * { box-sizing: border-box; }
+    body { color:#171717; font: 10pt/1.45 "Noto Sans JP", sans-serif; margin:0; }
+    h1 { font-size: 22pt; letter-spacing:.12em; margin:0; }
+    .number { margin:.4rem 0 1rem; text-align:right; }
+    .header { display:grid; grid-template-columns: 1fr 1fr; gap:10mm; margin-bottom:7mm; }
+    .party { min-width:0; border-top:1.2px solid #222; padding-top:3mm; }
+    .party h2 { font-size:10pt; margin:0 0 2mm; }
+    .party p { margin:0 0 1mm; overflow-wrap:anywhere; white-space:pre-wrap; }
+    .total-box { border:2px solid #111; margin:0 0 6mm auto; padding:3mm 5mm; text-align:right; width:88mm; }
+    .total-box .label { font-size:10pt; } .total-box strong { font-size:18pt; font-variant-numeric: tabular-nums; white-space:nowrap; }
+    table { border-collapse:collapse; table-layout:fixed; width:100%; }
+    thead { display:table-header-group; }
+    /* Keep the totals in the table, but do not repeat them on every page. */
+    tfoot { display:table-row-group; break-inside:avoid; page-break-inside:avoid; }
+    th, td { border:1px solid #333; padding:2.3mm 2mm; vertical-align:top; overflow-wrap:anywhere; white-space:pre-wrap; }
+    th { background:#f0f0f0; text-align:center; font-weight:600; }
+    .number-cell { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; overflow-wrap:normal; }
+    .unit-cell { text-align:center; }
+    tbody tr { break-inside:avoid; page-break-inside:avoid; }
+    tfoot tr { break-inside:avoid; page-break-inside:avoid; }
+    tfoot th { text-align:right; background:#fafafa; } tfoot td { font-weight:600; }
+    tfoot tr:last-child th, tfoot tr:last-child td { border-top:2px solid #111; font-size:12pt; }
+    .notes { margin-top:7mm; white-space:pre-wrap; overflow-wrap:anywhere; }
+  </style>
+</head>
+<body>
+  <h1>{{.Title}}</h1>
+  <div class="number">No. {{.Number}}　発行日: {{.IssuedOn}}</div>
+  <section class="header">
+    <div class="party"><h2>請求先／お見積先</h2><p>{{.ClientName}} {{.ClientHonorific}}</p><p>{{.ClientAddress}}</p><p>ご担当: {{.ClientContactName}}</p><p>TEL: {{.ClientContactPhone}}</p></div>
+    <div class="party"><h2>請求元／お見積元</h2><p>{{.ContractorName}}</p><p>代表者: {{.ContractorRepresentative}}</p><p>{{.ContractorAddress}}</p></div>
+  </section>
+  <div class="total-box"><div class="label">税込合計金額</div><strong>{{.Total}}</strong></div>
+  <table>
+    <colgroup><col style="width:27%"><col style="width:10%"><col style="width:9%"><col style="width:15%"><col style="width:15%"><col style="width:24%"></colgroup>
+    <thead><tr><th>項目</th><th>数量</th><th>単位</th><th>単価</th><th>金額</th><th>備考</th></tr></thead>
+    <tbody>{{range .Lines}}<tr><td>{{.ItemName}}</td><td class="number-cell">{{.Quantity}}</td><td class="unit-cell">{{.Unit}}</td><td class="number-cell">{{.UnitPrice}}</td><td class="number-cell">{{.Amount}}</td><td>{{.Notes}}</td></tr>{{end}}</tbody>
+    <tfoot>
+      <tr><th colspan="4">合計</th><td class="number-cell" colspan="2">{{.Subtotal}}</td></tr>
+      <tr><th colspan="4">値引き</th><td class="number-cell" colspan="2">{{.Discount}}</td></tr>
+      <tr><th colspan="4">税抜合計</th><td class="number-cell" colspan="2">{{.PreTax}}</td></tr>
+      <tr><th colspan="4">消費税額（10%）</th><td class="number-cell" colspan="2">{{.Tax}}</td></tr>
+      <tr><th colspan="4">{{.TotalLabel}}</th><td class="number-cell" colspan="2">{{.Total}}</td></tr>
+    </tfoot>
+  </table>
+</body>
+</html>

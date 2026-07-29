@@ -1,0 +1,82 @@
+services:
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: construction
+      MYSQL_USER: construction
+      MYSQL_PASSWORD: construction
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  migrate:
+    image: migrate/migrate:v4.18.1
+    command: ["-path", "/migrations", "-database", "mysql://construction:construction@tcp(db:3306)/construction?multiStatements=true", "up"]
+    volumes:
+      - ./backend/migrations:/migrations:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  # Internal-only renderer. The backend uploads a self-contained HTML document
+  # and a request-local font; no host port or remote URL feature is required.
+  gotenberg:
+    # Multi-architecture manifest list; Docker selects the child matching the host platform.
+    image: gotenberg/gotenberg:8.34.0-chromium@sha256:e6b66c4553c7747f86fb41d012665c5ac114b46188f53d09080d217bcb16cee2
+    environment:
+      API_BODY_LIMIT: 16MB
+      API_TIMEOUT: 30s
+      API_DISABLE_DOWNLOAD_FROM: "true"
+      CHROMIUM_AUTO_START: "true"
+      CHROMIUM_MAX_CONCURRENCY: "2"
+      CHROMIUM_MAX_QUEUE_SIZE: "10"
+      WEBHOOK_DISABLE: "true"
+      CHROMIUM_DENY_PRIVATE_IPS: "true"
+      CHROMIUM_DENY_PUBLIC_IPS: "true"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:3000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 15s
+
+  backend:
+    build: ./backend
+    environment:
+      APP_ENV: development
+      PORT: "8080"
+      DATABASE_DSN: construction:construction@tcp(db:3306)/construction?charset=utf8mb4&parseTime=True&loc=UTC
+      SESSION_SECRET: development-only-change-this-to-a-long-random-secret
+      CORS_ORIGIN: http://localhost:5173
+      GOTENBERG_URL: http://gotenberg:3000
+      GOTENBERG_TIMEOUT: 35s
+      GOTENBERG_MAX_CONCURRENCY: "2"
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      gotenberg:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    environment:
+      VITE_API_BASE_URL: http://localhost:8080/api/v1
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:

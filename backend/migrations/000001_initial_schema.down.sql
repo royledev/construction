@@ -1,0 +1,15 @@
+DROP TABLE IF EXISTS schedules;
+DROP TABLE IF EXISTS daily_reports;
+DROP TABLE IF EXISTS invoice_lines;
+DROP TABLE IF EXISTS invoices;
+DROP TABLE IF EXISTS estimate_lines;
+DROP TABLE IF EXISTS estimates;
+DROP TABLE IF EXISTS project_members;
+DROP TABLE IF EXISTS projects;
+DROP TABLE IF EXISTS client_unit_prices;
+DROP TABLE IF EXISTS master_items;
+DROP TABLE IF EXISTS subcontractor_workers;
+DROP TABLE IF EXISTS subcontractors;
+DROP TABLE IF EXISTS clients;
+DROP TABLE IF EXISTS accounts;
+DROP TABLE IF EXISTS employees;
