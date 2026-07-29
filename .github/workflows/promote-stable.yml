@@ -1,0 +1,157 @@
+name: Promote master to stable
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: promote-stable
+  cancel-in-progress: false
+
+jobs:
+  verify-stable:
+    name: verify-stable
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require master dispatch
+        env:
+          DISPATCH_REF: ${{ github.ref }}
+        run: |
+          if [ "$DISPATCH_REF" != "refs/heads/master" ]; then
+            echo "::error::Run this workflow from the master branch."
+            exit 1
+          fi
+
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Verify backend
+        working-directory: backend
+        run: |
+          go mod verify
+          go test ./...
+          go vet ./...
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Test frontend
+        working-directory: frontend
+        run: npm test
+
+      - name: Lint frontend
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Validate and build stable Compose
+        env:
+          DOMAIN: stable.example.invalid
+          MYSQL_DATABASE: stable_db
+          MYSQL_USER: stable_user
+          MYSQL_PASSWORD: stable-password
+          MYSQL_ROOT_PASSWORD: stable-root-password
+          SESSION_SECRET: stable-session-secret-0123456789abcdef
+        run: |
+          docker compose -f docker-compose.stable.yml config --quiet
+          docker compose -f docker-compose.stable.yml build backend frontend migrate
+
+  promote-stable:
+    name: promote-stable
+    needs: verify-stable
+    runs-on: ubuntu-latest
+    environment: stable
+    permissions:
+      contents: write
+    env:
+      SOURCE_SHA: ${{ github.sha }}
+      TARGET_BRANCH: stable
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Fast-forward stable
+        run: |
+          write_summary() {
+            result="$1"
+            run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            {
+              echo "## Stable promotion"
+              echo "- Source: \`$SOURCE_SHA\`"
+              echo "- Target: \`$TARGET_BRANCH\`"
+              echo "- Workflow run: $run_url"
+              echo "- Result: $result"
+            } >> "$GITHUB_STEP_SUMMARY"
+          }
+
+          git fetch --no-tags origin \
+            "+refs/heads/master:refs/remotes/origin/master" \
+            "+refs/heads/$TARGET_BRANCH:refs/remotes/origin/$TARGET_BRANCH"
+
+          current_master_sha="$(git rev-parse origin/master)"
+          if [ "$current_master_sha" != "$SOURCE_SHA" ]; then
+            echo "::error::master changed after this workflow started."
+            echo "Expected: $SOURCE_SHA"
+            echo "Actual:   $current_master_sha"
+            exit 1
+          fi
+
+          if git merge-base --is-ancestor "$SOURCE_SHA" "origin/$TARGET_BRANCH"; then
+            echo "$TARGET_BRANCH already contains $SOURCE_SHA; nothing to promote."
+            write_summary "Already promoted (no-op)"
+            exit 0
+          fi
+
+          if ! git merge-base --is-ancestor "origin/$TARGET_BRANCH" "$SOURCE_SHA"; then
+            echo "::error::$TARGET_BRANCH has diverged from the verified master commit."
+            exit 1
+          fi
+
+          git fetch --no-tags origin \
+            "+refs/heads/master:refs/remotes/origin/master" \
+            "+refs/heads/$TARGET_BRANCH:refs/remotes/origin/$TARGET_BRANCH"
+          current_master_sha="$(git rev-parse origin/master)"
+          if [ "$current_master_sha" != "$SOURCE_SHA" ]; then
+            echo "::error::master changed immediately before promotion."
+            exit 1
+          fi
+
+          if git merge-base --is-ancestor "$SOURCE_SHA" "origin/$TARGET_BRANCH"; then
+            echo "$TARGET_BRANCH already contains $SOURCE_SHA; nothing to promote."
+            write_summary "Already promoted (no-op)"
+            exit 0
+          fi
+
+          if ! git merge-base --is-ancestor "origin/$TARGET_BRANCH" "$SOURCE_SHA"; then
+            echo "::error::$TARGET_BRANCH diverged immediately before promotion."
+            exit 1
+          fi
+
+          git push origin "$SOURCE_SHA:refs/heads/$TARGET_BRANCH"
+          write_summary "Fast-forward promotion succeeded"
